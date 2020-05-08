@@ -36,3 +36,9 @@ variable "ingress_with_source_security_group_id" {
   type        = list(map(string))
   default     = []
 }
+
+variable "egress_with_source_security_group_id" {
+  description = "List of egress rules to create where 'source_security_group_id' is used."
+  type = list(map(string))
+  default = []
+}

@@ -9,8 +9,20 @@ data "aws_security_group" "default" {
   vpc_id = module.vpc.vpc_id
 }
 
+data "template_file" "docker" {
+  template = "${file("${path.module}/scripts/docker.tpl")}"
+}
+
+data "http" "get_public_ip" {
+  url = "http://icanhazip.com"
+}
+
+data "aws_security_group" "public_sg" {
+  id = module.public_sg.this_security_group_id
+}
+
 resource "aws_key_pair" "instance_key_pair" {
-  key_name   = "ec2_sandbox"
+  key_name   = "aws_key_pair"
   public_key = file(var.key_path)
 }
 
@@ -24,21 +36,31 @@ module "vpc" {
   private_subnets  = ["10.0.64.0/18"]
   database_subnets = ["10.0.128.0/19", "10.0.160.0/19"]
 
-  create_database_subnet_group = true
+  create_database_subnet_group = false
 
   enable_dns_hostnames = false
   enable_dns_support   = false
 }
 
-module "bastion_sg" {
+module "public_sg" {
   source = "./modules/sg"
 
-  name        = "bastion_sg"
-  description = "Bastion Host Security Group"
+  name        = "public_sg"
+  description = "Public Subnet Security Group"
   vpc_id      = module.vpc.vpc_id
 
-  ingress_cidr_blocks = ["0.0.0.0/0", module.vpc.vpc_cidr_block]
-  ingress_rules       = ["http-80-tcp", "https-443-tcp", "ssh-tcp", "all-icmp"]
+  ingress_cidr_blocks = [join("", [trimspace(data.http.get_public_ip.body), "/32"]), module.vpc.vpc_cidr_block]
+  ingress_rules       = ["ssh-tcp", "all-icmp"]
+    egress_with_source_security_group_id = [
+    {
+      rule                     = "ssh-tcp"
+      source_security_group_id = module.webhost_sg.this_security_group_id
+    }, 
+    {
+      rule                     = "all-icmp"
+      source_security_group_id = module.webhost_sg.this_security_group_id
+    }
+    ]
 }
 
 module "bastion" {
@@ -46,8 +68,9 @@ module "bastion" {
   name                   = "bastion_host"
   ami                    = "ami-0d6621c01e8c2de2c"
   instance_type          = "t2.micro"
+    associate_public_ip_address = true
   key_name               = aws_key_pair.instance_key_pair.key_name
-  vpc_security_group_ids = [module.bastion_sg.this_security_group_id]
+  vpc_security_group_ids = [module.public_sg.this_security_group_id]
   subnet_id              = module.vpc.public_subnets[0]
   tags = {
     Name = "Bastion Host"
@@ -64,15 +87,19 @@ module "webhost_sg" {
   ingress_with_source_security_group_id = [
     {
       rule                     = "http-80-tcp"
-      source_security_group_id = module.bastion_sg.this_security_group_id
+      source_security_group_id = data.aws_security_group.public_sg.id
     },
     {
       rule                     = "https-443-tcp"
-      source_security_group_id = module.bastion_sg.this_security_group_id
+      source_security_group_id = data.aws_security_group.public_sg.id
     },
     {
       rule                     = "ssh-tcp"
-      source_security_group_id = module.bastion_sg.this_security_group_id
+      source_security_group_id = data.aws_security_group.public_sg.id
+    }, 
+    {
+      rule = "all-icmp"
+      source_security_group_id = data.aws_security_group.public_sg.id
     }
   ]
 }
@@ -85,6 +112,7 @@ module "webhost" {
   key_name               = aws_key_pair.instance_key_pair.key_name
   vpc_security_group_ids = [module.webhost_sg.this_security_group_id]
   subnet_id              = module.vpc.private_subnets[0]
+  user_data = data.template_file.docker.rendered
   tags = {
     Name = "Webhost"
   }

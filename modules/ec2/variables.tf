@@ -18,6 +18,12 @@ variable "key_name" {
   type        = string
 }
 
+variable "associate_public_ip_address" {
+  description = "If true, the EC2 instance will have associated public IP address."
+  type        = bool
+  default     = false
+}
+
 variable "monitoring" {
   description = "If true, the launched EC2 instance will have detailed monitoring enabled."
   type        = bool
@@ -39,18 +45,6 @@ variable "user_data" {
   type        = string
   default     = null
 }
-
-# variable "create_elasticache_subnet_group" {
-#     description = "Controls if elasticache subnet group should be created."
-#     type = bool
-#     default = false
-# }
-
-# variable "create_redshift_subnet_group" {
-#     description = "Controls if redshift subnet group should be created."
-#     type = bool
-#     default = false
-# }
 
 variable "tags" {
   description = "A mapping of tags to assign to the resource."
