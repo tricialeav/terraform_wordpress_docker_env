@@ -10,4 +10,5 @@ module "sg" {
   ingress_with_cidr_blocks              = var.ingress_with_cidr_blocks
   ingress_with_source_security_group_id = var.ingress_with_source_security_group_id
   egress_with_source_security_group_id = var.egress_with_source_security_group_id
+  egress_rules = var.egress_rules
 }

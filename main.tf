@@ -34,12 +34,13 @@ module "vpc" {
   azs              = ["us-west-2a", "us-west-2b"]
   public_subnets   = ["10.0.0.0/18"]
   private_subnets  = ["10.0.64.0/18"]
-  database_subnets = ["10.0.128.0/19", "10.0.160.0/19"]
+  database_subnets = ["10.0.128.0/19"]
 
   create_database_subnet_group = false
 
-  enable_dns_hostnames = false
-  enable_dns_support   = false
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  enable_nat_gateway = true
 }
 
 module "public_sg" {
@@ -51,16 +52,7 @@ module "public_sg" {
 
   ingress_cidr_blocks = [join("", [trimspace(data.http.get_public_ip.body), "/32"]), module.vpc.vpc_cidr_block]
   ingress_rules       = ["ssh-tcp", "all-icmp"]
-    egress_with_source_security_group_id = [
-    {
-      rule                     = "ssh-tcp"
-      source_security_group_id = module.webhost_sg.this_security_group_id
-    }, 
-    {
-      rule                     = "all-icmp"
-      source_security_group_id = module.webhost_sg.this_security_group_id
-    }
-    ]
+  egress_rules = ["all-tcp", "all-udp", "ssh-tcp", "all-icmp"]
 }
 
 module "bastion" {
@@ -68,7 +60,7 @@ module "bastion" {
   name                   = "bastion_host"
   ami                    = "ami-0d6621c01e8c2de2c"
   instance_type          = "t2.micro"
-    associate_public_ip_address = true
+  associate_public_ip_address = true
   key_name               = aws_key_pair.instance_key_pair.key_name
   vpc_security_group_ids = [module.public_sg.this_security_group_id]
   subnet_id              = module.vpc.public_subnets[0]
@@ -102,6 +94,7 @@ module "webhost_sg" {
       source_security_group_id = data.aws_security_group.public_sg.id
     }
   ]
+    egress_rules = ["all-tcp", "all-udp"]
 }
 
 module "webhost" {
